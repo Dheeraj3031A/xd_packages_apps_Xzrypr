@@ -27,17 +27,85 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class Misc extends SettingsPreferenceFragment {
+import android.net.Uri;
+import android.os.Handler;
+import android.util.Log;
+import android.widget.Toast;
+
+import android.content.Intent;
+import android.app.Activity;
+import android.os.SystemProperties;
+
+import android.content.Intent;
+import android.app.Activity;
+import android.os.SystemProperties;
+
+public class Misc extends SettingsPreferenceFragment implements
+        Preference.OnPreferenceChangeListener {
+
+    private static final String KEY_PIF_JSON_FILE_PREFERENCE = "pif_json_file_preference";
+    private Preference mPifJsonFilePreference;
+    private Handler mHandler;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mHandler = new Handler();
 
         addPreferencesFromResource(R.xml.xzrypr_settings_misc);
+        mPifJsonFilePreference = findPreference(KEY_PIF_JSON_FILE_PREFERENCE);
     }
 
     @Override
     public int getMetricsCategory() {
         return MetricsProto.MetricsEvent.XD_ZONE;
     }
+
+    @Override
+    public boolean onPreferenceTreeClick(Preference preference) {
+        if (preference == mPifJsonFilePreference) {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("application/json");
+            startActivityForResult(intent, 10001);
+            return true;
+        }
+        return super.onPreferenceTreeClick(preference);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 10001 && resultCode == Activity.RESULT_OK) {
+            Uri uri = data.getData();
+            Log.d(TAG, "URI received: " + uri.toString());
+            try (InputStream inputStream = getActivity().getContentResolver().openInputStream(uri)) {
+                if (inputStream != null) {
+                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[1024];
+                    int length;
+                    while ((length = inputStream.read(buffer)) != -1) {
+                        byteArrayOutputStream.write(buffer, 0, length);
+                    }
+                    String json = new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8);
+
+                    Log.d(TAG, "JSON data: " + json);
+                    JSONObject jsonObject = new JSONObject(json);
+                    for (Iterator<String> it = jsonObject.keys(); it.hasNext(); ) {
+                        String key = it.next();
+                        String value = jsonObject.getString(key);
+                        Log.d(TAG, "Setting property: persist.sys.pihooks_" + key + " = " + value);
+                        SystemProperties.set("persist.sys.pihooks_" + key, value);
+                    }
+                    Toast.makeText(
+                        getContext(),
+                        getContext().getResources().getString(R.string.pif_json_select_success),
+                        Toast.LENGTH_LONG
+                    ).show();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error reading JSON or setting properties", e);
+            }
+        }
+    }
+
 }

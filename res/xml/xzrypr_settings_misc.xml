@@ -31,4 +31,9 @@
           android:layout="@layout/xd_pref_card_sin"
           android:defaultValue="false" />
 
+    <Preference
+         android:key="pif_json_file_preference"
+         android:title="@string/pif_spoofing_title"
+         android:summary="@string/pif_spoofing_summary"/>
+
 </PreferenceScreen>
